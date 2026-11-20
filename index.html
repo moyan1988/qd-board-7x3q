@@ -1,0 +1,77 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex"><title>OKX 实盘看板 · v4</title>
+<style>
+:root{--bg:#0f1115;--card:#181b22;--fg:#e6e8ee;--mut:#8a90a0;--up:#16c784;--dn:#ea3943;--bd:#272b35}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 -apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;padding:12px max(12px,env(safe-area-inset-left)) 40px}
+h1{font-size:18px;margin:0 0 8px}h2{font-size:15px;margin:0 0 8px;color:var(--mut);font-weight:600}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin:0 0 12px}
+.row{display:flex;flex-wrap:wrap;gap:8px}.kpi{flex:1 1 140px;background:#1f232c;border-radius:10px;padding:8px 10px}
+.kpi b{display:block;font-size:20px}.kpi span{color:var(--mut);font-size:12px}
+.up{color:var(--up)}.dn{color:var(--dn)}.mut{color:var(--mut)}.badge{display:inline-block;padding:1px 8px;border-radius:99px;font-size:12px;font-weight:700}
+.live{background:#16c78433;color:var(--up)}.dry{background:#f0b90b33;color:#f0b90b}.stale{background:#ea394333;color:var(--dn)}
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}table{border-collapse:collapse;width:100%;min-width:520px;font-size:13px}
+th,td{padding:6px 6px;border-bottom:1px solid var(--bd);text-align:right;white-space:nowrap}th:first-child,td:first-child{text-align:left}th{color:var(--mut);font-weight:500}
+svg{width:100%;height:200px;display:block}.empty{color:var(--mut);padding:8px 0}
+</style></head><body>
+<h1>OKX 合约实盘看板 <span id="mode" class="badge">…</span></h1>
+<div class="mut" id="sub">加载中…</div>
+<div class="card"><div class="row">
+<div class="kpi"><span>当前权益 (USDT)</span><b id="eq">-</b></div>
+<div class="kpi"><span>累计盈亏 (起始 400U)</span><b id="pnl">-</b></div>
+<div class="kpi"><span>浮动盈亏</span><b id="upl">-</b></div>
+<div class="kpi"><span>程序心跳</span><b id="hb">-</b></div>
+</div><div class="mut" id="rules" style="margin-top:8px;font-size:12px"></div></div>
+<div class="card"><h2>权益曲线（近 7 天）</h2><div id="chart"></div></div>
+<div class="card"><h2>当前持仓</h2><div class="tw" id="pos"></div></div>
+<div class="card"><h2>各币信号</h2><div class="tw" id="sig"></div></div>
+<div class="card"><h2>最近成交</h2><div class="tw" id="trd"></div></div>
+<div class="card"><h2>资金费</h2><div class="tw" id="fund"></div></div>
+<div class="card"><h2>告警</h2><div class="tw" id="alr"></div></div>
+<div class="mut" style="font-size:12px">只读页面，每 60 秒自动刷新。时间为迪拜时间 (UTC+4)。</div>
+<script>
+// raw branch 'data' is force-pushed every minute (no Pages rebuild); fallback: local/Pages copy
+const SRC=location.hostname.endsWith('github.io')?['https://raw.githubusercontent.com/moyan1988/qd-board-7x3q/data/data.json','data.json']:['data.json'];
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const num=(x,d=2)=>x===null||x===undefined||x===''||isNaN(+x)?'-':(+x).toLocaleString('en-US',{maximumFractionDigits:d,minimumFractionDigits:0});
+const px=x=>{if(x===null||x===undefined||x===''||isNaN(+x))return'-';x=+x;return Math.abs(x)<0.01?x.toPrecision(5):num(x,Math.abs(x)<10?4:2)};
+const cls=x=>+x>0?'up':+x<0?'dn':'';
+const t=s=>s?esc(String(s).replace('T',' ').slice(5,16)):'-';
+const coin=i=>esc(String(i||'').replace('-USDT-SWAP',''));
+const side=s=>s==='long'?'<span class="up">多</span>':s==='short'?'<span class="dn">空</span>':esc(s||'-');
+function table(h,rows){return rows.length?`<table><tr>${h.map(x=>`<th>${x}</th>`).join('')}</tr>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</table>`:'<div class="empty">暂无</div>'}
+function chart(pts,start){
+ if(pts.length<2){$('chart').innerHTML='<div class="empty">数据不足</div>';return}
+ const W=600,H=200,P=36,ys=pts.map(p=>+p.equity_usdt).concat([start]);let lo=Math.min(...ys),hi=Math.max(...ys);if(hi-lo<1){lo-=1;hi+=1}
+ const t0=Date.parse(pts[0].time_utc),t1=Date.parse(pts[pts.length-1].time_utc)||t0+1;
+ const X=s=>P+(Date.parse(s)-t0)/(t1-t0||1)*(W-P-6),Y=v=>6+(hi-v)/(hi-lo)*(H-26);
+ const d=pts.map((p,i)=>(i?'L':'M')+X(p.time_utc).toFixed(1)+','+Y(+p.equity_usdt).toFixed(1)).join('');
+ const last=+pts[pts.length-1].equity_usdt,col=last>=start?'#16c784':'#ea3943';
+ $('chart').innerHTML=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+ <line x1="${P}" x2="${W}" y1="${Y(start)}" y2="${Y(start)}" stroke="#555" stroke-dasharray="4 4"/>
+ <text x="2" y="${Y(hi)+10}" fill="#8a90a0" font-size="11">${num(hi,1)}</text><text x="2" y="${Y(lo)}" fill="#8a90a0" font-size="11">${num(lo,1)}</text>
+ <text x="2" y="${Y(start)+4}" fill="#8a90a0" font-size="11">400</text>
+ <path d="${d}" fill="none" stroke="${col}" stroke-width="2" vector-effect="non-scaling-stroke"/>
+ <text x="${P}" y="${H-4}" fill="#8a90a0" font-size="11">${t(pts[0].time_dubai)}</text><text x="${W-4}" y="${H-4}" fill="#8a90a0" font-size="11" text-anchor="end">${t(pts[pts.length-1].time_dubai)}</text></svg>`}
+async function load(){
+ try{
+  let d=null;for(const u of SRC){try{const r=await fetch(u+'?t='+Date.now(),{cache:'no-store'});if(r.ok){d=await r.json();break}}catch(e){}}if(!d)throw new Error('no data');
+  const st=d.status||{},m=st.mode||'?',age=(Date.now()/1000-(st.heartbeat_epoch||0));
+  $('mode').textContent=m==='LIVE'?'实盘 LIVE':m==='DRY_RUN'?'模拟 DRY RUN':m;$('mode').className='badge '+(m==='LIVE'?'live':'dry');
+  const eq=d.account?.equity_usdt,pnl=eq!=null?eq-d.start_equity:null,upl=(d.positions||[]).reduce((a,p)=>a+(+p.upl||0),0);
+  $('eq').textContent=num(eq);$('pnl').innerHTML=`<span class="${cls(pnl)}">${pnl>0?'+':''}${num(pnl)} (${pnl!=null?num(pnl/d.start_equity*100,1):'-'}%)</span>`;
+  $('upl').innerHTML=`<span class="${cls(upl)}">${upl>0?'+':''}${num(upl)}</span>`;
+  const am=Math.round(age/60);$('hb').innerHTML=age>900?`<span class="badge stale">${am} 分钟前 · 异常</span>`:`<span class="up">${age<90?Math.round(age)+' 秒前':am+' 分钟前'}</span>`;
+  const r=d.rules||{};$('rules').textContent=`固定 ${r.lever||5} 倍逐仓 · 每笔保证金 ≤${(r.margin_pct_per_trade||.1)*100}% 权益 · 最多 ${r.max_positions||3} 个持仓 · 无止损止盈${st.kill_switch_STOP?' · ⛔ 已暂停开新仓':''}`;
+  $('sub').textContent=`策略 ${st.strategy||''} · 数据更新 ${t(new Date(d.generated_epoch*1000+4*3600e3).toISOString())}（${Math.round(Date.now()/1000-d.generated_epoch)} 秒前）`;
+  chart(d.equity||[],d.start_equity);
+  $('pos').innerHTML=table(['币种','方向','张数','开仓价','标记价','浮盈亏','保证金','强平价','距强平'],(d.positions||[]).map(p=>[coin(p.instId),side(p.side),num(Math.abs(p.pos),4),px(p.avgPx),px(p.markPx),`<span class="${cls(p.upl)}">${num(p.upl)} (${num((+p.uplRatio||0)*100,1)}%)</span>`,num(p.margin),px(p.liqPx),p.liq_distance_pct==null?'-':`<span class="${p.liq_distance_pct<8?'dn':''}">${num(p.liq_distance_pct,1)}%</span>`]));
+  $('sig').innerHTML=table(['币种','1h 趋势','15m 收盘','20根高','20根低','15m EMA20','信号'],Object.entries(d.signals||{}).map(([k,s])=>[coin(k),s.error?'<span class="dn">错误</span>':side(s.trend_1h),px(s.last_15m_close),px(s.hh20_15m),px(s.ll20_15m),px(s.ema20_15m),s.exit_signal?`<span class="dn">平仓：${esc(s.exit_signal)}</span>`:s.entry_signal?`<b>开${s.entry_signal==='long'?'多':'空'}</b>`:s.position?'持仓中':'<span class="mut">等待</span>']));
+  $('trd').innerHTML=table(['时间','币种','动作','方向','张数','成交价','已实现盈亏','手续费','原因'],(d.trades||[]).slice().reverse().map(x=>[t(x.time_dubai)+(x.dry_run?' <span class="badge dry">模拟</span>':''),coin(x.instId),x.action==='open'?'开仓':x.action==='close'?'平仓':esc(x.action),side(x.side),esc(x.size_contracts),px(x.price),`<span class="${cls(x.pnl)}">${x.pnl==null?'-':num(x.pnl,4)}</span>`,x.fee==null?'-':num(x.fee,4),esc(x.reason)]));
+  $('fund').innerHTML=table(['时间','币种','金额'],(d.funding||[]).slice().reverse().map(x=>[t(x.time_dubai),coin(x.instId),`<span class="${cls(x.amount)}">${num(x.amount,4)}</span>`]));
+  $('alr').innerHTML=table(['时间','来源','类型','详情'],(d.alerts||[]).slice().reverse().map(x=>[t(x.time_dubai),esc(x.source),esc(x.kind),`<span style="white-space:normal">${esc(JSON.stringify(x.detail)).slice(0,160)}</span>`]));
+ }catch(e){$('sub').innerHTML='<span class="dn">数据加载失败，稍后自动重试</span>'}
+}
+load();setInterval(load,60000);
+</script></body></html>
