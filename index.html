@@ -31,7 +31,9 @@ svg{width:100%;height:200px;display:block}.empty{color:var(--mut);padding:8px 0}
 <div class="mut" style="font-size:12px">只读页面，每 60 秒自动刷新。时间为迪拜时间 (UTC+4)。</div>
 <script>
 // raw branch 'data' is force-pushed every minute (no Pages rebuild); fallback: local/Pages copy
-const SRC=location.hostname.endsWith('github.io')?['https://raw.githubusercontent.com/moyan1988/qd-board-7x3q/data/data.json','data.json']:['data.json'];
+const GH=location.hostname.endsWith('github.io');
+// 1) GitHub contents API (~60s cache; ETag revalidation -> 304s don't count toward 60/h limit) 2) raw (~5 min cache) 3) Pages/local copy
+const SRC=GH?[{u:'https://api.github.com/repos/moyan1988/qd-board-7x3q/contents/data.json?ref=data',o:{cache:'no-cache',headers:{Accept:'application/vnd.github.raw+json'}}},{u:'https://raw.githubusercontent.com/moyan1988/qd-board-7x3q/data/data.json?t=',o:{cache:'no-store'}},{u:'data.json?t=',o:{cache:'no-store'}}]:[{u:'data.json?t=',o:{cache:'no-store'}}];
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const num=(x,d=2)=>x===null||x===undefined||x===''||isNaN(+x)?'-':(+x).toLocaleString('en-US',{maximumFractionDigits:d,minimumFractionDigits:0});
@@ -56,7 +58,7 @@ function chart(pts,start){
  <text x="${P}" y="${H-4}" fill="#8a90a0" font-size="11">${t(pts[0].time_dubai)}</text><text x="${W-4}" y="${H-4}" fill="#8a90a0" font-size="11" text-anchor="end">${t(pts[pts.length-1].time_dubai)}</text></svg>`}
 async function load(){
  try{
-  let d=null;for(const u of SRC){try{const r=await fetch(u+'?t='+Date.now(),{cache:'no-store'});if(r.ok){d=await r.json();break}}catch(e){}}if(!d)throw new Error('no data');
+  let d=null;for(const x of SRC){try{const r=await fetch(x.u.endsWith('t=')?x.u+Date.now():x.u,x.o);if(r.ok){d=await r.json();break}}catch(e){}}if(!d)throw new Error('no data');
   const st=d.status||{},m=st.mode||'?',age=(Date.now()/1000-(st.heartbeat_epoch||0));
   $('mode').textContent=m==='LIVE'?'实盘 LIVE':m==='DRY_RUN'?'模拟 DRY RUN':m;$('mode').className='badge '+(m==='LIVE'?'live':'dry');
   const eq=d.account?.equity_usdt,pnl=eq!=null?eq-d.start_equity:null,upl=(d.positions||[]).reduce((a,p)=>a+(+p.upl||0),0);
