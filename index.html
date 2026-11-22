@@ -13,6 +13,9 @@ h1{font-size:18px;margin:0 0 8px}h2{font-size:15px;margin:0 0 8px;color:var(--mu
 .tw{overflow-x:auto;-webkit-overflow-scrolling:touch}table{border-collapse:collapse;width:100%;min-width:520px;font-size:13px}
 th,td{padding:6px 6px;border-bottom:1px solid var(--bd);text-align:right;white-space:nowrap}th:first-child,td:first-child{text-align:left}th{color:var(--mut);font-weight:500}
 svg{width:100%;height:200px;display:block}.empty{color:var(--mut);padding:8px 0}
+.tag{display:inline-block;padding:0 6px;border-radius:6px;font-size:12px;font-weight:700}.t-red{background:#ea394333;color:#ff5b64}.t-yel{background:#f0b90b33;color:#f0b90b}.t-gry{background:#8a90a022;color:var(--mut)}.t-grn{background:#16c78433;color:var(--up)}
+.note{font-size:12px;color:var(--mut);margin:-4px 0 8px}td.wrap{white-space:normal;text-align:left;min-width:150px}td.wrap small{color:var(--mut)}
+details summary{cursor:pointer;list-style:none}details summary::-webkit-details-marker{display:none}details[open] summary{margin-bottom:4px}.dl{font-size:12px;color:var(--mut);line-height:1.5}
 </style></head><body>
 <h1>OKX 合约实盘看板 <span id="mode" class="badge">…</span></h1>
 <div class="mut" id="sub">加载中…</div>
@@ -24,7 +27,7 @@ svg{width:100%;height:200px;display:block}.empty{color:var(--mut);padding:8px 0}
 </div><div class="mut" id="rules" style="margin-top:8px;font-size:12px"></div></div>
 <div class="card"><h2>权益曲线（近 7 天）</h2><div id="chart"></div></div>
 <div class="card"><h2>当前持仓</h2><div class="tw" id="pos"></div></div>
-<div class="card"><h2>各币信号</h2><div class="tw" id="sig"></div></div>
+<div class="card"><h2>各币信号</h2><div class="note">交易只按 v4.1 规则执行；均线方向、预警、资讯仅供参考，不影响开平仓</div><div class="tw" id="sig"></div><div class="note" id="sigfoot" style="margin:6px 0 0"></div></div>
 <div class="card"><h2>最近成交</h2><div class="tw" id="trd"></div></div>
 <div class="card"><h2>资金费</h2><div class="tw" id="fund"></div></div>
 <div class="card"><h2>告警</h2><div class="tw" id="alr"></div></div>
@@ -65,11 +68,25 @@ async function load(){
   $('eq').textContent=num(eq);$('pnl').innerHTML=`<span class="${cls(pnl)}">${pnl>0?'+':''}${num(pnl)} (${pnl!=null?num(pnl/d.start_equity*100,1):'-'}%)</span>`;
   $('upl').innerHTML=`<span class="${cls(upl)}">${upl>0?'+':''}${num(upl)}</span>`;
   const am=Math.round(age/60);$('hb').innerHTML=age>900?`<span class="badge stale">${am} 分钟前 · 异常</span>`:`<span class="up">${age<90?Math.round(age)+' 秒前':am+' 分钟前'}</span>`;
-  const r=d.rules||{};$('rules').textContent=`固定 ${r.lever||5} 倍逐仓 · 每笔保证金 ≤${(r.margin_pct_per_trade||.1)*100}% 权益 · 最多 ${r.max_positions||3} 个持仓 · 无止损止盈${st.kill_switch_STOP?' · ⛔ 已暂停开新仓':''}`;
+  const r=d.rules||{};$('rules').textContent=`固定 ${r.lever||5} 倍逐仓 · 每笔保证金 ≤${(r.margin_pct_per_trade||.1)*100}% 权益 · 最多 ${r.max_positions||3} 个持仓 · 交易所保护止损（开仓价反向 8%，只为停机兜底）${st.kill_switch_STOP?' · ⛔ 已暂停开新仓':''}`;
   $('sub').textContent=`策略 ${st.strategy||''} · 数据更新 ${t(new Date(d.generated_epoch*1000+4*3600e3).toISOString())}（${Math.round(Date.now()/1000-d.generated_epoch)} 秒前）`;
   chart(d.equity||[],d.start_equity);
-  $('pos').innerHTML=table(['币种','方向','张数','开仓价','标记价','浮盈亏','保证金','强平价','距强平'],(d.positions||[]).map(p=>[coin(p.instId),side(p.side),num(Math.abs(p.pos),4),px(p.avgPx),px(p.markPx),`<span class="${cls(p.upl)}">${num(p.upl)} (${num((+p.uplRatio||0)*100,1)}%)</span>`,num(p.margin),px(p.liqPx),p.liq_distance_pct==null?'-':`<span class="${p.liq_distance_pct<8?'dn':''}">${num(p.liq_distance_pct,1)}%</span>`]));
-  $('sig').innerHTML=table(['币种','1h 趋势','15m 收盘','20根高','20根低','15m EMA20','信号'],Object.entries(d.signals||{}).map(([k,s])=>[coin(k),s.error?'<span class="dn">错误</span>':side(s.trend_1h),px(s.last_15m_close),px(s.hh20_15m),px(s.ll20_15m),px(s.ema20_15m),s.exit_signal?`<span class="dn">平仓：${esc(s.exit_signal)}</span>`:s.entry_signal?`<b>开${s.entry_signal==='long'?'多':'空'}</b>`:s.position?'持仓中':'<span class="mut">等待</span>']));
+  $('pos').innerHTML=table(['币种','方向','张数','开仓价','标记价','浮盈亏','保证金','强平价','距强平','保护止损'],(d.positions||[]).map(p=>[coin(p.instId),side(p.side),num(Math.abs(p.pos),4),px(p.avgPx),px(p.markPx),`<span class="${cls(p.upl)}">${num(p.upl)} (${num((+p.uplRatio||0)*100,1)}%)</span>`,num(p.margin),px(p.liqPx),p.liq_distance_pct==null?'-':`<span class="${p.liq_distance_pct<8?'dn':''}">${num(p.liq_distance_pct,1)}%</span>`,p.stop_trigger?px(p.stop_trigger):'<span class="dn">无</span>']));
+  const W_=d.warnings||{},WI=W_.items||{},wAge=W_.epoch?Math.round((Date.now()/1000-W_.epoch)/60):null,NT=d.news_tags||{};
+  const dirCell=s=>{if(s.error)return'<span class="dn">错误</span>';const g=s.ema_gap_pct_1h;const near=g!=null&&Math.abs(g)<0.5;
+   return `${side(s.trend_1h)} <small>EMA20 ${px(s.ema20_1h)} / EMA60 ${px(s.ema60_1h)}<br>差距 ${g==null?'-':(g>0?'+':'')+num(g,2)+'%'}</small>${near?' <span class="tag t-yel">接近反转</span>':''}`};
+  const warnCell=k=>{const w=WI[k];if(!w)return'<span class="mut">—</span>';if(w.error)return`<span class="mut" title="${esc(w.error)}">计算失败</span>`;
+   const b=w.bars||{},cnt=['15m','1h','4h'].map(p=>`${p} ${b[p]?b[p].n:'-'}`).join(' · ');
+   const lv=w.level==='alert'?'<span class="tag t-red">预警</span>':w.level==='watch'?'<span class="tag t-yel">留意</span>':'<span class="tag t-gry">无</span>';
+   const det=['15m','1h','4h'].map(p=>{const x=b[p];if(!x)return'';return `${p}（${esc(x.closed_at||'')} 收）：${x.hit.length?esc(x.hit.join('、')):'无'} <span style="opacity:.75">RSI ${num(x.rsi_prev,1)}→${num(x.rsi,1)} · K/D ${num(x.K,1)}/${num(x.D,1)} · 量比 ${num(x.vol_ratio,2)} · MACD柱 ${x.macd_hist_prev<0?'负':'正'}→${x.macd_hist<0?'负':'正'}</span>`}).join('<br>');
+   const dir=`按${w.side==='long'?'多':'空'}${w.side_src==='position'?'（持仓方向）':'（1h 均线方向）'}看反向信号`;
+   return `<details><summary title="${esc(dir)}">${lv} <small>${cnt}</small></summary><div class="dl">${esc(dir)}<br>${det}</div></details>`};
+  const newsCell=k=>{const c=coin(k).toUpperCase(),st=NT.status;if(!st||st==='missing'||st==='bad')return'<span class="mut">—</span>';const x=(NT.tags||{})[c];if(!x)return'<span class="mut">—</span>';
+   if(st==='stale')return`<span class="tag t-gry" title="${esc(x.note)}">过期</span> <small class="mut">${esc(x.tag)}</small>`;
+   const pend=/待选币与资讯更新/.test(x.note||'');const tc=x.tag==='利好'?'t-grn':x.tag==='利空'?'t-red':'t-gry';
+   return `<span class="tag ${tc}">${esc(x.tag)}${pend?'·待更新':''}</span><br><small>${esc(x.note)}</small>`};
+  $('sig').innerHTML=table(['币种','1h 均线方向','盘中预警 <small>(点开看明细)</small>','资讯标签','15m 收盘','20根高','20根低','15m EMA20','信号'],Object.entries(d.signals||{}).map(([k,s])=>[coin(k),dirCell(s),warnCell(k),newsCell(k),px(s.last_15m_close),px(s.hh20_15m),px(s.ll20_15m),px(s.ema20_15m),s.exit_signal?`<span class="dn">平仓：${esc(s.exit_signal)}</span>`:s.entry_signal?`<b>开${s.entry_signal==='long'?'多':'空'}</b>`:s.position?'持仓中':'<span class="mut">等待</span>'])).replace(/<td>(<span class="(?:up|dn)">[多空]<\/span> <small>EMA20)/g,'<td class="wrap">$1').replace(/<td>(<details>|<span class="tag t-(?:grn|red|gry)">[^<]*<\/span><br>)/g,'<td class="wrap">$1');
+  $('sigfoot').innerHTML=`预警规则 v1：KDJ(9,3,3) 低位金叉 / RSI(14) 上穿 30 / MACD 柱负转正 / 量比≥1.5 阳线（多方向对称），15m·1h·4h 各取最近已收盘 K 线；同一周期≥2 项＝<span class="tag t-red">预警</span>，1 项＝<span class="tag t-yel">留意</span>。差距＝(EMA20−EMA60)/EMA60，绝对值&lt;0.5% 标「接近反转」。预警计算于 ${esc(W_.time_dubai||'-')}${wAge!=null&&wAge>10?` <span class="dn">（${wAge} 分钟前，偏旧）</span>`:''}；资讯更新于 ${esc(NT.updated||'-')}${NT.status==='stale'?' <span class="dn">已过期</span>':''}。`;
   $('trd').innerHTML=table(['时间','币种','动作','方向','张数','成交价','已实现盈亏','手续费','原因'],(d.trades||[]).slice().reverse().map(x=>[t(x.time_dubai)+(x.dry_run?' <span class="badge dry">模拟</span>':''),coin(x.instId),x.action==='open'?'开仓':x.action==='close'?'平仓':esc(x.action),side(x.side),esc(x.size_contracts),px(x.price),`<span class="${cls(x.pnl)}">${x.pnl==null?'-':num(x.pnl,4)}</span>`,x.fee==null?'-':num(x.fee,4),esc(x.reason)]));
   $('fund').innerHTML=table(['时间','币种','金额'],(d.funding||[]).slice().reverse().map(x=>[t(x.time_dubai),coin(x.instId),`<span class="${cls(x.amount)}">${num(x.amount,4)}</span>`]));
   $('alr').innerHTML=table(['时间','来源','类型','详情'],(d.alerts||[]).slice().reverse().map(x=>[t(x.time_dubai),esc(x.source),esc(x.kind),`<span style="white-space:normal">${esc(JSON.stringify(x.detail)).slice(0,160)}</span>`]));
