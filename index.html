@@ -30,6 +30,11 @@ details summary{cursor:pointer;list-style:none}details summary::-webkit-details-
 <div class="kpi"><span>对照组累计</span><b id="ftpnl">-</b></div>
 <div class="kpi"><span>同期 v4.1</span><b id="ftv41">-</b></div>
 <div class="kpi"><span>已平仓 / 胜</span><b id="ftcnt">-</b></div>
+</div><div class="row" style="margin-top:8px">
+<div class="kpi"><span>对照组最大回撤</span><b id="ftdd">-</b></div>
+<div class="kpi"><span>同期 v4.1 最大回撤</span><b id="ftv41dd">-</b></div>
+<div class="kpi"><span>杠杆（对照 / v4.1）</span><b id="ftlev">-</b></div>
+<div class="kpi"><span>最低下单量跳过</span><b id="ftskip">-</b></div>
 </div><div class="tw" id="ftpos" style="margin-top:8px"></div><div class="tw" id="fttrd" style="margin-top:8px"></div></div>
 <div class="card"><h2>权益曲线（近 7 天）</h2><div id="chart"></div></div>
 <div class="card"><h2>当前持仓</h2><div class="tw" id="pos"></div></div>
@@ -77,12 +82,16 @@ async function load(){
   const r=d.rules||{};$('rules').textContent=`固定 ${r.lever||5} 倍逐仓 · 每笔保证金 ≤${(r.margin_pct_per_trade||.1)*100}% 权益 · 最多 ${r.max_positions||3} 个持仓 · 交易所保护止损（开仓价反向 8%，只为停机兜底）${st.kill_switch_STOP?' · ⛔ 已暂停开新仓':''}`;
   $('sub').textContent=`策略 ${st.strategy||''} · 数据更新 ${t(new Date(d.generated_epoch*1000+4*3600e3).toISOString())}（${Math.round(Date.now()/1000-d.generated_epoch)} 秒前）`;
   const F=d.freqtrade||{};if(F.status==='ok'){const la=F.log_age_s;$('ftst').textContent=la!=null&&la<1500?'实盘 运行中':'日志 '+Math.round((la||0)/60)+' 分钟未更新';$('ftst').className='badge '+(la!=null&&la<1500?'live':'stale');
-   $('ftsub').textContent=`子账户 ${F.label||''} · 策略 ${F.strategy||''} · 5 倍逐仓 · 每仓约 10% 权益、最多 2 仓 · 起点 ${F.start_time_dubai||''}（${num(F.start_equity)}U）· 权益=起始+已实现+浮盈亏（估算）`;
+   $('ftsub').textContent=`子账户 ${F.label||''} · 策略 ${F.strategy||''} · 比较区间自 ${F.compare_since_dubai||'2026-11-22 14:00'}（迪拜）· 每仓约 10% 权益、最多 2 仓 · 起点 ${F.start_time_dubai||''}（${num(F.start_equity)}U）· 权益=起始+已实现+浮盈亏（估算）；因最低下单量跳过的开仓单独计数，不计入收益率`;
    $('fteq').textContent=num(F.equity_est,2);const pc=x=>x==null?'-':`<span class="${cls(x)}">${x>0?'+':''}${num(x,2)}%</span>`;
    $('ftpnl').innerHTML=pc(F.pnl_pct)+` <small class="mut">${F.realized+F.upl>0?'+':''}${num(F.realized+F.upl,3)}U</small>`;$('ftv41').innerHTML=pc(F.v41_pnl_pct)+` <small class="mut">起 ${num(F.v41_start_equity,1)}U</small>`;
    $('ftcnt').textContent=`${F.closed_count} / ${F.wins}`;
-   $('ftpos').innerHTML=table(['持仓','方向','数量','开仓价','标记价','浮盈亏','保证金','止损','强平价'],(F.positions||[]).map(p=>[coin(p.instId),side(p.side),num(p.amount,4),px(p.open_rate),px(p.mark),`<span class="${cls(p.upl)}">${num(p.upl,4)}</span>`,num(p.margin,3),px(p.stop),px(p.liq)]));
-   $('fttrd').innerHTML=(F.closed||[]).length?table(['平仓时间','币种','方向','开','平','盈亏','原因'],F.closed.slice().reverse().map(x=>[x.close_date?t(new Date(Date.parse(String(x.close_date).replace(' ','T')+'Z')+4*3600e3).toISOString()):'-',esc(String(x.pair).split('/')[0]),x.is_short?'<span class="dn">空</span>':'<span class="up">多</span>',px(x.open_rate),px(x.close_rate),`<span class="${cls(x.close_profit_abs)}">${num(x.close_profit_abs,4)}</span>`,esc(x.exit_reason)])):'';
+   const dd=x=>x==null||x===''?'-':`<span class="${+x>0?'dn':''}">${num(x,2)}%</span>`;
+   $('ftdd').innerHTML=dd(F.max_dd_pct);$('ftv41dd').innerHTML=dd(F.v41_max_dd_pct);
+   $('ftlev').textContent=`${F.leverage||5}x / ${F.v41_leverage||5}x`;
+   const sk=+F.min_order_skip_count||0;$('ftskip').innerHTML=sk?`<span class="dn">${sk}</span> <small class="mut">不计入收益率</small>`:'0';
+   $('ftpos').innerHTML=table(['持仓','方向','数量','开仓价','标记价','浮盈亏','保证金','占权益','止损','强平价'],(F.positions||[]).map(p=>[coin(p.instId),side(p.side),num(p.amount,4),px(p.open_rate),px(p.mark),`<span class="${cls(p.upl)}">${num(p.upl,4)}</span>`,num(p.margin,3),p.margin_pct_of_equity==null?'-':num(p.margin_pct_of_equity,2)+'%',px(p.stop),px(p.liq)]));
+   $('fttrd').innerHTML=(F.closed||[]).length?table(['平仓时间','币种','方向','开','平','盈亏','占权益','原因'],F.closed.slice().reverse().map(x=>[x.close_date?t(new Date(Date.parse(String(x.close_date).replace(' ','T')+'Z')+4*3600e3).toISOString()):'-',esc(String(x.pair).split('/')[0]),x.is_short?'<span class="dn">空</span>':'<span class="up">多</span>',px(x.open_rate),px(x.close_rate),`<span class="${cls(x.close_profit_abs)}">${num(x.close_profit_abs,4)}</span>`,x.margin_pct_of_equity==null?'-':num(x.margin_pct_of_equity,2)+'%',esc(x.exit_reason)])):'';
   }else{$('ftst').textContent=F.status?'读取失败':'未接入';$('ftst').className='badge stale'}
   chart(d.equity||[],d.start_equity);
   $('pos').innerHTML=table(['币种','方向','张数','开仓价','标记价','浮盈亏','保证金','强平价','距强平','保护止损'],(d.positions||[]).map(p=>[coin(p.instId),side(p.side),num(Math.abs(p.pos),4),px(p.avgPx),px(p.markPx),`<span class="${cls(p.upl)}">${num(p.upl)} (${num((+p.uplRatio||0)*100,1)}%)</span>`,num(p.margin),px(p.liqPx),p.liq_distance_pct==null?'-':`<span class="${p.liq_distance_pct<8?'dn':''}">${num(p.liq_distance_pct,1)}%</span>`,p.stop_trigger?px(p.stop_trigger):'<span class="dn">无</span>']));
