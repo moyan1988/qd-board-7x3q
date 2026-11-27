@@ -97,7 +97,7 @@ async function load(){
   $('pos').innerHTML=table(['币种','方向','张数','开仓价','标记价','浮盈亏','保证金','强平价','距强平','保护止损'],(d.positions||[]).map(p=>[coin(p.instId),side(p.side),num(Math.abs(p.pos),4),px(p.avgPx),px(p.markPx),`<span class="${cls(p.upl)}">${num(p.upl)} (${num((+p.uplRatio||0)*100,1)}%)</span>`,num(p.margin),px(p.liqPx),p.liq_distance_pct==null?'-':`<span class="${p.liq_distance_pct<8?'dn':''}">${num(p.liq_distance_pct,1)}%</span>`,p.stop_trigger?px(p.stop_trigger):'<span class="dn">无</span>']));
   const W_=d.warnings||{},WI=W_.items||{},wAge=W_.epoch?Math.round((Date.now()/1000-W_.epoch)/60):null,NT=d.news_tags||{};
   const dirCell=s=>{if(s.error)return'<span class="dn">错误</span>';const g=s.ema_gap_pct_1h;const near=g!=null&&Math.abs(g)<0.5;
-   return `${side(s.trend_1h)} <small>EMA20 ${px(s.ema20_1h)} / EMA60 ${px(s.ema60_1h)}<br>差距 ${g==null?'-':(g>0?'+':'')+num(g,2)+'%'}</small>${near?' <span class="tag t-yel">接近反转</span>':''}`};
+   return `${side(s.trend_1h)} <small>EMA20 ${px(s.ema20_1h)} / EMA60 ${px(s.ema60_1h)}<br>差距 ${g==null?'-':(g>0?'+':'')+num(g,2)+'%'}</small>${near?' <span class="tag t-yel">接近反转</span>':''}${s.trend_flip_pending?` <span class="tag t-yel">翻转待确认 ${esc(String(s.trend_flip_pending).split(' ').pop())}</span>`:''}`};
   const warnCell=k=>{const w=WI[k];if(!w)return'<span class="mut">—</span>';if(w.error)return`<span class="mut" title="${esc(w.error)}">计算失败</span>`;
    const b=w.bars||{},cnt=['15m','1h','4h'].map(p=>`${p} ${b[p]?b[p].n:'-'}`).join(' · ');
    const lv=w.level==='alert'?'<span class="tag t-red">预警</span>':w.level==='watch'?'<span class="tag t-yel">留意</span>':'<span class="tag t-gry">无</span>';
