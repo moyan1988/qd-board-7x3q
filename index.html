@@ -42,7 +42,7 @@ details summary{cursor:pointer;list-style:none}details summary::-webkit-details-
 <div class="card"><h2>最近成交</h2><div class="tw" id="trd"></div></div>
 <div class="card"><h2>资金费</h2><div class="tw" id="fund"></div></div>
 <div class="card"><h2>告警</h2><div class="tw" id="alr"></div></div>
-<div class="mut" style="font-size:12px">只读页面，每 60 秒自动刷新。时间为迪拜时间 (UTC+4)。</div>
+<div class="mut" style="font-size:12px">只读页面，每 60 秒自动刷新。时间为北京时间 (UTC+8)；交易日按北京日（00:00 切换）。</div>
 <script>
 // raw branch 'data' is force-pushed every minute (no Pages rebuild); fallback: local/Pages copy
 const GH=location.hostname.endsWith('github.io');
@@ -53,7 +53,7 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const num=(x,d=2)=>x===null||x===undefined||x===''||isNaN(+x)?'-':(+x).toLocaleString('en-US',{maximumFractionDigits:d,minimumFractionDigits:0});
 const px=x=>{if(x===null||x===undefined||x===''||isNaN(+x))return'-';x=+x;return Math.abs(x)<0.01?x.toPrecision(5):num(x,Math.abs(x)<10?4:2)};
 const cls=x=>+x>0?'up':+x<0?'dn':'';
-const t=s=>s?esc(String(s).replace('T',' ').slice(5,16)):'-';
+const t=s=>{if(!s)return'-';let x=String(s).trim().replace(' ','T');if(!/([zZ]|[+-]\d\d:?\d\d)$/.test(x))x+='+04:00';const ms=Date.parse(x);if(isNaN(ms))return esc(String(s).replace('T',' ').slice(5,16));return esc(new Date(ms+8*3600e3).toISOString().slice(5,16).replace('T',' '))};/* 全部换算为北京时间；无时区的旧标签按迪拜 +04:00 解析 */
 const coin=i=>esc(String(i||'').replace('-USDT-SWAP',''));
 const side=s=>s==='long'?'<span class="up">多</span>':s==='short'?'<span class="dn">空</span>':esc(s||'-');
 function table(h,rows){return rows.length?`<table><tr>${h.map(x=>`<th>${x}</th>`).join('')}</tr>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</table>`:'<div class="empty">暂无</div>'}
@@ -82,7 +82,7 @@ async function load(){
   const r=d.rules||{};$('rules').textContent=`固定 ${r.lever||5} 倍逐仓 · 每笔保证金 ≤${(r.margin_pct_per_trade||.1)*100}% 权益 · 最多 ${r.max_positions||3} 个持仓 · 交易所保护止损（开仓价反向 8%，只为停机兜底）${st.kill_switch_STOP?' · ⛔ 已暂停开新仓':''}`;
   $('sub').textContent=`策略 ${st.strategy||''} · 数据更新 ${t(new Date(d.generated_epoch*1000+4*3600e3).toISOString())}（${Math.round(Date.now()/1000-d.generated_epoch)} 秒前）`;
   const F=d.freqtrade||{};if(F.status==='ok'){const la=F.log_age_s;$('ftst').textContent=la!=null&&la<1500?'实盘 运行中':'日志 '+Math.round((la||0)/60)+' 分钟未更新';$('ftst').className='badge '+(la!=null&&la<1500?'live':'stale');
-   $('ftsub').textContent=`子账户 ${F.label||''} · 策略 ${F.strategy||''} · 比较区间自 ${F.compare_since_dubai||'2026-11-22 14:00'}（迪拜）· 每仓约 10% 权益、最多 2 仓 · 起点 ${F.start_time_dubai||''}（${num(F.start_equity)}U）· 权益=起始+已实现+浮盈亏（估算）；因最低下单量跳过的开仓单独计数，不计入收益率`;
+   $('ftsub').textContent=`子账户 ${F.label||''} · 策略 ${F.strategy||''} · 比较区间自 ${t(F.compare_since_dubai||'2026-11-22 14:00')}（北京）· 每仓约 10% 权益、最多 2 仓 · 起点 ${t(F.start_time_dubai)}（北京，${num(F.start_equity)}U）· 权益=起始+已实现+浮盈亏（估算）；因最低下单量跳过的开仓单独计数，不计入收益率`;
    $('fteq').textContent=num(F.equity_est,2);const pc=x=>x==null?'-':`<span class="${cls(x)}">${x>0?'+':''}${num(x,2)}%</span>`;
    $('ftpnl').innerHTML=pc(F.pnl_pct)+` <small class="mut">${F.realized+F.upl>0?'+':''}${num(F.realized+F.upl,3)}U</small>`;$('ftv41').innerHTML=pc(F.v41_pnl_pct)+` <small class="mut">起 ${num(F.v41_start_equity,1)}U</small>`;
    $('ftcnt').textContent=`${F.closed_count} / ${F.wins}`;
@@ -109,7 +109,7 @@ async function load(){
    const pend=/待选币与资讯更新/.test(x.note||'');const tc=x.tag==='利好'?'t-grn':x.tag==='利空'?'t-red':'t-gry';
    return `<span class="tag ${tc}">${esc(x.tag)}${pend?'·待更新':''}</span><br><small>${esc(x.note)}</small>`};
   $('sig').innerHTML=table(['币种','1h 均线方向','盘中预警 <small>(点开看明细)</small>','资讯标签','15m 收盘','20根高','20根低','15m EMA20','信号'],Object.entries(d.signals||{}).map(([k,s])=>[coin(k),dirCell(s),warnCell(k),newsCell(k),px(s.last_15m_close),px(s.hh20_15m),px(s.ll20_15m),px(s.ema20_15m),s.exit_signal?`<span class="dn">平仓：${esc(s.exit_signal)}</span>`:s.entry_signal?`<b>开${s.entry_signal==='long'?'多':'空'}</b>`:s.position?'持仓中':'<span class="mut">等待</span>'])).replace(/<td>(<span class="(?:up|dn)">[多空]<\/span> <small>EMA20)/g,'<td class="wrap">$1').replace(/<td>(<details>|<span class="tag t-(?:grn|red|gry)">[^<]*<\/span><br>)/g,'<td class="wrap">$1');
-  $('sigfoot').innerHTML=`预警规则 v1：KDJ(9,3,3) 低位金叉 / RSI(14) 上穿 30 / MACD 柱负转正 / 量比≥1.5 阳线（多方向对称），15m·1h·4h 各取最近已收盘 K 线；同一周期≥2 项＝<span class="tag t-red">预警</span>，1 项＝<span class="tag t-yel">留意</span>。差距＝(EMA20−EMA60)/EMA60，绝对值&lt;0.5% 标「接近反转」。预警计算于 ${esc(W_.time_dubai||'-')}${wAge!=null&&wAge>10?` <span class="dn">（${wAge} 分钟前，偏旧）</span>`:''}；资讯更新于 ${esc(NT.updated||'-')}${NT.status==='stale'?' <span class="dn">已过期</span>':''}。`;
+  $('sigfoot').innerHTML=`预警规则 v1：KDJ(9,3,3) 低位金叉 / RSI(14) 上穿 30 / MACD 柱负转正 / 量比≥1.5 阳线（多方向对称），15m·1h·4h 各取最近已收盘 K 线；同一周期≥2 项＝<span class="tag t-red">预警</span>，1 项＝<span class="tag t-yel">留意</span>。差距＝(EMA20−EMA60)/EMA60，绝对值&lt;0.5% 标「接近反转」。预警计算于 ${t(W_.time_dubai)}${wAge!=null&&wAge>10?` <span class="dn">（${wAge} 分钟前，偏旧）</span>`:''}；资讯更新于 ${t(NT.updated)}${NT.status==='stale'?' <span class="dn">已过期</span>':''}。`;
   $('trd').innerHTML=table(['时间','币种','动作','方向','张数','成交价','已实现盈亏','手续费','原因'],(d.trades||[]).slice().reverse().map(x=>[t(x.time_dubai)+(x.dry_run?' <span class="badge dry">模拟</span>':''),coin(x.instId),x.action==='open'?'开仓':x.action==='close'?'平仓':esc(x.action),side(x.side),esc(x.size_contracts),px(x.price),`<span class="${cls(x.pnl)}">${x.pnl==null?'-':num(x.pnl,4)}</span>`,x.fee==null?'-':num(x.fee,4),esc(x.reason)]));
   $('fund').innerHTML=table(['时间','币种','金额'],(d.funding||[]).slice().reverse().map(x=>[t(x.time_dubai),coin(x.instId),`<span class="${cls(x.amount)}">${num(x.amount,4)}</span>`]));
   $('alr').innerHTML=table(['时间','来源','类型','详情'],(d.alerts||[]).slice().reverse().map(x=>[t(x.time_dubai),esc(x.source),esc(x.kind),`<span style="white-space:normal">${esc(JSON.stringify(x.detail)).slice(0,160)}</span>`]));
